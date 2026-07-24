@@ -7,10 +7,11 @@ from typing import Callable, Iterator
 log = logging.getLogger("retry")
 
 # Jeda dasar (detik) tiap percobaan ulang saat kena 429. Kalau penyedia AI
-# menyarankan waktu tunggu sendiri (retry_after), itu yang dipakai (dibatasi
-# maksimum agar tidak melebihi batas waktu fungsi server).
-_RETRY_DELAYS = (4, 8, 15, 22)
-_MAX_DELAY = 30
+# menyarankan waktu tunggu sendiri (retry_after), itu yang dipakai.
+# Total jeda dijaga kecil (~27 dtk) supaya muat dalam batas 60 detik fungsi
+# Vercel, menyisakan waktu untuk pembuatan dokumen.
+_RETRY_DELAYS = (4, 8, 15)
+_MAX_DELAY = 18
 
 
 def _delay_for(attempt: int, exc: "ModelBusy") -> int:
