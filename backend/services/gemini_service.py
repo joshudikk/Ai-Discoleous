@@ -7,6 +7,7 @@ Dua kemampuan yang dipakai aplikasi:
 
 import json
 import logging
+import re
 from typing import Iterator
 
 from google import genai
@@ -26,12 +27,20 @@ client = genai.Client(api_key=get_settings().gemini_api_key)
 
 
 def _terjemahkan(exc: Exception) -> Exception:
-    """Ubah 429/kuota habis dari Gemini jadi ModelBusy agar pesannya jelas."""
+    """Ubah 429/kuota habis dari Gemini jadi ModelBusy agar pesannya jelas.
+
+    Sekaligus mengambil waktu tunggu yang disarankan Google (retryDelay) supaya
+    retry menunggu tepat selama itu.
+    """
     teks = str(exc)
     kode = getattr(exc, "code", None)
     if kode == 429 or "429" in teks or "RESOURCE_EXHAUSTED" in teks:
         log.warning("Batas laju Gemini tercapai: %s", teks[:200])
-        return ModelBusy(BUSY_MESSAGE)
+        busy = ModelBusy(BUSY_MESSAGE)
+        m = re.search(r"retryDelay['\"]?\s*[:=]\s*['\"]?(\d+)", teks) or re.search(r"retry in (\d+)", teks)
+        if m:
+            busy.retry_after = int(m.group(1))
+        return busy
     return exc
 
 

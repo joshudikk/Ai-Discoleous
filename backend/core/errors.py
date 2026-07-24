@@ -6,10 +6,19 @@ from typing import Callable, Iterator
 
 log = logging.getLogger("retry")
 
-# Berapa kali mencoba ulang saat kena 429, dan jeda (detik) tiap percobaan.
-# 429 dari tier gratis biasanya batas per-menit yang sesaat; jeda pendek
-# umumnya sudah cukup untuk lolos.
-_RETRY_DELAYS = (5, 12)
+# Jeda dasar (detik) tiap percobaan ulang saat kena 429. Kalau penyedia AI
+# menyarankan waktu tunggu sendiri (retry_after), itu yang dipakai (dibatasi
+# maksimum agar tidak melebihi batas waktu fungsi server).
+_RETRY_DELAYS = (4, 8, 15, 22)
+_MAX_DELAY = 30
+
+
+def _delay_for(attempt: int, exc: "ModelBusy") -> int:
+    base = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+    saran = getattr(exc, "retry_after", None)
+    if saran:
+        return min(max(int(saran) + 1, base), _MAX_DELAY)
+    return base
 
 
 class ModelBusy(RuntimeError):
@@ -21,10 +30,10 @@ class ModelBusy(RuntimeError):
     """
 
 
-# Ditampilkan apa adanya ke pengguna.
+# Ditampilkan apa adanya ke pengguna (hanya muncul kalau retry otomatis pun gagal).
 BUSY_MESSAGE = (
-    "Server AI sedang ramai dipakai banyak orang. Untuk hasil yang maksimal, "
-    "tunggu sekitar 30 menit lalu jalankan lagi. Kuotamu tidak terpotong."
+    "Server AI sedang sibuk sesaat. Sistem sudah mencoba ulang otomatis — "
+    "silakan tekan Buat sekali lagi dalam beberapa menit. Kuotamu tidak terpotong."
 )
 
 
@@ -43,10 +52,10 @@ def retry_stream(make_stream: Callable[[], Iterator[str]]) -> Iterator[str]:
                 produced = True
                 yield piece
             return
-        except ModelBusy:
+        except ModelBusy as exc:
             if produced or attempt >= len(_RETRY_DELAYS):
                 raise
-            delay = _RETRY_DELAYS[attempt]
+            delay = _delay_for(attempt, exc)
             log.info("Model sibuk (429). Coba lagi ke-%d dalam %ds.", attempt + 1, delay)
             time.sleep(delay)
             attempt += 1
@@ -58,10 +67,10 @@ def retry_call(fn: Callable):
     while True:
         try:
             return fn()
-        except ModelBusy:
+        except ModelBusy as exc:
             if attempt >= len(_RETRY_DELAYS):
                 raise
-            delay = _RETRY_DELAYS[attempt]
+            delay = _delay_for(attempt, exc)
             log.info("Model sibuk (429). Coba lagi ke-%d dalam %ds.", attempt + 1, delay)
             time.sleep(delay)
             attempt += 1

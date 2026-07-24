@@ -137,7 +137,15 @@ def generate_document_stream_athena(
                 ) from exc
             if exc.status_code == 429 or "rate limit" in pesan or "quota" in pesan:
                 log.warning("Batas laju OpenRouter tercapai: %s", exc)
-                raise ModelBusy(BUSY_MESSAGE) from exc
+                busy = ModelBusy(BUSY_MESSAGE)
+                # Hormati header Retry-After bila ada.
+                try:
+                    ra = exc.response.headers.get("retry-after")
+                    if ra:
+                        busy.retry_after = int(float(ra))
+                except Exception:
+                    pass
+                raise busy from exc
             if exc.status_code == 404:
                 log.error("Model Athena tidak ditemukan: %s", model)
                 raise AthenaUnavailable(
