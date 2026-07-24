@@ -1,0 +1,24 @@
+# Blueprint Render untuk backend Discoleous.
+# Di Render: New -> Blueprint -> pilih repo ini. Isi nilai rahasia saat diminta.
+services:
+  - type: web
+    name: discoleous-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Python 3.12 punya wheel lengkap untuk semua dependensi (hindari 3.14).
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Nilai di bawah diisi di dashboard Render (sync:false = tidak disimpan di repo).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
