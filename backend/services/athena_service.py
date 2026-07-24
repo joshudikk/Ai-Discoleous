@@ -16,7 +16,7 @@ from typing import Iterator
 from openai import APIStatusError, OpenAI
 
 from core.config import get_settings
-from core.errors import BUSY_MESSAGE, ModelBusy
+from core.errors import BUSY_MESSAGE, ModelBusy, retry_stream
 from core.tiers import Tier, build_prompt, build_system_instruction
 
 log = logging.getLogger("athena")
@@ -145,4 +145,6 @@ def generate_document_stream_athena(
                 ) from exc
             raise
 
-    yield from _strip_thinking(mentah())
+    # Kena 429 sesaat → otomatis dicoba ulang (retry_stream hanya menangkap
+    # ModelBusy; AthenaUnavailable untuk kunci/model salah tetap diteruskan).
+    yield from retry_stream(lambda: _strip_thinking(mentah()))
