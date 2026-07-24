@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-void text-slate-200 font-sans antialiased;
+    background-image:
+      radial-gradient(900px 600px at 12% -10%, rgba(121, 40, 202, 0.18), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(0, 242, 254, 0.12), transparent 55%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    @apply bg-cyan-neon/30 text-white;
+  }
+  /* Fokus keyboard tetap terlihat */
+  :focus-visible {
+    outline: 2px solid #00f2fe;
+    outline-offset: 2px;
+  }
+  /* Scrollbar cyber */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0f19;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(0, 242, 254, 0.5), rgba(121, 40, 202, 0.5));
+    border-radius: 999px;
+  }
+}
+
+@layer components {
+  /* Kartu glassmorphism dasar dipakai di seluruh aplikasi */
+  .glass {
+    @apply bg-slate-900/40 backdrop-blur-md border border-cyan-500/20 shadow-[0_0_15px_rgba(0,242,254,0.1)];
+  }
+  .glass-hover {
+    @apply transition-all duration-300 hover:border-cyan-400/60 hover:shadow-[0_0_25px_rgba(0,242,254,0.5)] hover:-translate-y-1;
+  }
+  .neon-text {
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.65), 0 0 28px rgba(0, 242, 254, 0.25);
+  }
+  .neon-text-lime {
+    text-shadow: 0 0 10px rgba(0, 255, 135, 0.65), 0 0 28px rgba(0, 255, 135, 0.25);
+  }
+  /* Input dengan garis neon saat fokus */
+  .field {
+    @apply w-full rounded-lg bg-slate-950/60 border border-cyan-500/20 px-4 py-3 text-sm text-slate-100
+           placeholder:text-slate-500 transition-all duration-200
+           focus:border-cyan-400 focus:shadow-[0_0_18px_rgba(0,242,254,0.35)] focus:outline-none;
+  }
+  .label {
+    @apply mb-1.5 block font-mono text-[11px] uppercase tracking-[0.18em] text-cyan-300/70;
+  }
+  /* Tombol utama: gradient + pendaran */
+  .btn-neon {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 font-display
+           text-sm font-semibold uppercase tracking-wider text-slate-950
+           bg-gradient-to-r from-cyan-neon via-electric to-glow
+           shadow-[0_0_20px_rgba(0,242,254,0.35)] transition-all duration-300
+           hover:shadow-[0_0_35px_rgba(0,242,254,0.65)] hover:brightness-110
+           active:scale-[0.98] disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-500/30 px-4 py-2.5
+           font-mono text-xs uppercase tracking-[0.15em] text-cyan-200 transition-all duration-300
+           hover:border-cyan-400 hover:text-white hover:shadow-[0_0_20px_rgba(0,242,254,0.35)];
+  }
+  /* Garis pemisah bergaris data */
+  .rule {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent;
+  }
+}
+
+/* Hormati preferensi kurangi animasi */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

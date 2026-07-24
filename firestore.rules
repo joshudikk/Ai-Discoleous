@@ -1,0 +1,63 @@
+rules_version = '2';
+
+// Aturan keamanan Firestore.
+// Prinsip: pengguna hanya boleh menyentuh datanya sendiri, dan tidak boleh
+// menaikkan paket atau status langganannya sendiri dari sisi klien.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Saat mendaftar, akun baru selalu berperan 'user' dan berstatus 'inactive'.
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == 'user'
+        && request.resource.data.statusSubscription == 'inactive'
+        && request.resource.data.packageTier in ['faozonica', 'sharnikas', 'dikthought'];
+
+      // Pengguna boleh memperbarui nama dan alamat saja.
+      allow update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == userId
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.packageTier == resource.data.packageTier
+            && request.resource.data.statusSubscription == resource.data.statusSubscription);
+
+      allow delete: if isAdmin();
+    }
+
+    // Isi dokumen hasil generate TIDAK disimpan di server. Dokumen tinggal di
+    // perangkat pengguna (localStorage peramban), jadi koleksi ini ditutup.
+    // Yang tersimpan di server hanya data akun, langganan, dan pembayaran.
+    match /documents/{docId} {
+      allow read, write: if false;
+    }
+
+    // Token aktivasi bersifat rahasia dari pengguna: kalau bisa dibaca klien,
+    // pengguna tinggal menyalin tokennya sendiri tanpa menghubungi admin.
+    // Ditolak total di sini; hanya backend (Admin SDK) yang melewati aturan ini
+    // yang boleh membaca/menulis koleksi `activations`.
+    match /activations/{userId} {
+      allow read, write: if false;
+    }
+
+    // Hitungan kuota pemakaian—hanya backend (Admin SDK) yang boleh mengelola.
+    match /usage/{userId} {
+      allow read, write: if false;
+    }
+
+    // Kredit mesin premium Claude—hanya backend (Admin SDK).
+    match /claude/{userId} {
+      allow read, write: if false;
+    }
+  }
+}

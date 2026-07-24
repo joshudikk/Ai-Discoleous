@@ -1,0 +1,8 @@
+# Jangan ikut diunggah ke Vercel.
+# .venv berukuran ratusan MB dan kunci rahasia tidak boleh keluar dari komputer.
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+serviceAccountKey.json
