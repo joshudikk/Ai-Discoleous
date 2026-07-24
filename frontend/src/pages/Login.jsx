@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { signInWithEmailAndPassword } from 'firebase/auth'
-import { AlertTriangle, ArrowRight, Eye, EyeOff, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Eye, EyeOff } from 'lucide-react'
 import { auth, signInWithGoogle } from '../lib/firebase'
 import GlassCard from '../components/GlassCard'
 import GoogleButton from '../components/GoogleButton'
+import BrandBanner from '../components/BrandBanner'
 
 const ERRORS = {
   'auth/invalid-credential': 'Email atau kata sandi tidak cocok.',
@@ -66,10 +67,7 @@ export default function Login() {
         className="w-full max-w-md"
       >
         <div className="mb-8 text-center">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-cyan-500/40
-                           bg-cyan-neon/10 text-cyan-neon shadow-neon animate-pulse-glow">
-            <Sparkles size={24} />
-          </span>
+          <BrandBanner />
           <h1 className="mt-5 font-display text-3xl font-bold text-white neon-text">Masuk ke ruang kerja</h1>
           <p className="mt-2 text-sm text-slate-400">Lanjutkan dokumen yang sedang kamu susun.</p>
         </div>

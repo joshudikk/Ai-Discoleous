@@ -9,6 +9,7 @@ import { PACKAGES } from '../lib/packages'
 import GlassCard from '../components/GlassCard'
 import PackageCard from '../components/PackageCard'
 import GoogleButton from '../components/GoogleButton'
+import BrandBanner from '../components/BrandBanner'
 
 const ERRORS = {
   'auth/email-already-in-use': 'Email ini sudah terdaftar. Masuk saja lewat halaman login.',
@@ -90,7 +91,8 @@ export default function Register() {
         transition={{ duration: 0.5 }}
         className="mb-10 text-center"
       >
-        <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-cyan-300/70">Buat akun</p>
+        <BrandBanner className="max-w-lg" />
+        <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.35em] text-cyan-300/70">Buat akun</p>
         <h1 className="mt-3 font-display text-4xl font-bold text-white neon-text sm:text-5xl">
           Mulai menyusun dokumen
         </h1>
