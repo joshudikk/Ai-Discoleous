@@ -24,21 +24,23 @@ from core.activation import (
     ACTIVATIONS,
     STATUS_ACTIVE,
     STATUS_PENDING,
+    STATUS_REJECTED,
     STATUS_VERIFIED,
     generate_token,
     normalize_token,
 )
-from core.claude_credits import (
-    check_and_reserve as claude_reserve,
-    get_status as claude_status,
-    grant_extra as claude_grant,
+from core.errors import BUSY_MESSAGE, ModelBusy
+from core.athena_credits import (
+    check_and_reserve as athena_reserve,
+    get_status as athena_status,
+    grant_extra as athena_grant,
 )
-from core.claude_credits import refund as claude_refund
+from core.athena_credits import refund as athena_refund
 from core.config import get_settings
 from core.firebase import CurrentUser, db, get_current_user, require_admin
 from core.schemas import (
+    AthenaGrantRequest,
     ClaimPaymentRequest,
-    ClaudeGrantRequest,
     GenerateRequest,
     MeResponse,
     PaymentStatusResponse,
@@ -48,7 +50,12 @@ from core.schemas import (
 )
 from core.tiers import get_tier
 from core.usage import check_and_reserve, get_status, refund
-from services.claude_service import claude_available, generate_document_stream_claude
+from services.athena_service import (
+    AthenaUnavailable,
+    athena_available,
+    athena_model_for,
+    generate_document_stream_athena,
+)
 from services.gemini_service import generate_document_stream, suggest_titles
 
 MAX_TOKEN_ATTEMPTS = 8
@@ -110,14 +117,22 @@ async def me(user: CurrentUser = Depends(get_current_user)):
 @app.get("/api/usage")
 async def api_usage(user: CurrentUser = Depends(get_current_user)):
     """Sisa kuota pembuatan dokumen + waktu pembaruannya."""
+    if user.role == "admin":
+        return {"unlimited": True, "limit": None, "used": 0, "remaining": None, "windowHours": None, "resetAt": None}
     return get_status(user.uid, get_tier(user.tier))
 
 
-@app.get("/api/claude-usage")
-async def api_claude_usage(user: CurrentUser = Depends(get_current_user)):
-    """Sisa kesempatan mesin premium Claude untuk pemanggil."""
-    data = claude_status(user.uid, get_tier(user.tier))
-    data["configured"] = claude_available()
+@app.get("/api/athena-usage")
+async def api_athena_usage(user: CurrentUser = Depends(get_current_user)):
+    """Sisa kesempatan mesin premium Athena Mode untuk pemanggil."""
+    if user.role == "admin":
+        return {
+            "enabled": True, "unlimited": True, "free": None, "freeRemaining": None,
+            "extraCredits": 0, "remaining": None, "period": "never", "resetAt": None,
+            "configured": athena_available(),
+        }
+    data = athena_status(user.uid, get_tier(user.tier))
+    data["configured"] = athena_available()
     return data
 
 
@@ -284,9 +299,10 @@ async def api_suggest_titles(
     user: CurrentUser = Depends(get_current_user),
 ):
     tier = get_tier(user.tier)
+    is_admin = user.role == "admin"
 
-    # Gerbang paket: hanya Sharnikas dan Dikthought
-    if not tier.can_suggest_titles:
+    # Gerbang paket: hanya Sharnikas dan Dikthought (admin bebas)
+    if not is_admin and not tier.can_suggest_titles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -298,10 +314,16 @@ async def api_suggest_titles(
             },
         )
 
-    _require_active(user)
+    if not is_admin:
+        _require_active(user)
 
     try:
         titles = suggest_titles(tier, body.jurusan, body.doc_type, body.keyword)
+    except ModelBusy as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "MODEL_BUSY", "message": BUSY_MESSAGE},
+        ) from exc
     except Exception as exc:
         log.exception("Saran judul gagal")
         raise HTTPException(
@@ -324,7 +346,11 @@ async def api_generate_document(
     user: CurrentUser = Depends(get_current_user),
 ):
     tier = get_tier(user.tier)
-    _require_active(user)
+    # Admin memakai AI tanpa batas: bebas dari cek langganan, kuota harian,
+    # kredit Athena, dan gerbang paket.
+    is_admin = user.role == "admin"
+    if not is_admin:
+        _require_active(user)
 
     common = dict(
         tier=tier,
@@ -337,62 +363,72 @@ async def api_generate_document(
         pustaka=body.pustaka,
     )
 
-    if body.engine == "claude":
-        # ── Mesin premium Claude ─────────────────────────────────────────────
-        if not tier.claude_enabled:
+    if body.engine == "athena":
+        # ── Mesin premium Athena Mode ────────────────────────────────────────
+        if not is_admin and not tier.athena_enabled:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail={"code": "CLAUDE_TIER_LOCKED", "message": "Athena Mode hanya untuk paket Sharnikas & Dikthought."},
+                detail={"code": "ATHENA_TIER_LOCKED", "message": "Athena Mode hanya untuk paket Sharnikas & Dikthought."},
             )
-        if not claude_available():
+        if not athena_available():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"code": "CLAUDE_UNCONFIGURED", "message": "Athena Mode belum diaktifkan admin. Coba lagi nanti."},
+                detail={"code": "ATHENA_UNCONFIGURED", "message": "Athena Mode belum diaktifkan admin. Coba lagi nanti."},
             )
-        reservation = claude_reserve(user.uid, tier)
-        if not reservation["allowed"]:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    "code": "CLAUDE_NO_CREDITS",
-                    "message": "Kesempatan Athena Mode sudah habis. Beli tambahan Rp15.000/pemakaian lewat admin (WhatsApp).",
-                    "resetAt": reservation.get("resetAt"),
-                },
-            )
-        model_label = tier.claude_model
-        source = reservation["source"]
+        if is_admin:
+            def do_refund():
+                pass
+        else:
+            reservation = athena_reserve(user.uid, tier)
+            if not reservation["allowed"]:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail={
+                        "code": "ATHENA_NO_CREDITS",
+                        "message": "Kesempatan Athena Mode sudah habis. Beli tambahan Rp15.000/pemakaian lewat admin (WhatsApp).",
+                        "resetAt": reservation.get("resetAt"),
+                    },
+                )
+            source = reservation["source"]
+
+            def do_refund():
+                athena_refund(user.uid, source)
+
+        model_label = athena_model_for(tier)
 
         def make_stream():
-            return generate_document_stream_claude(**common)
-
-        def do_refund():
-            claude_refund(user.uid, source)
+            return generate_document_stream_athena(**common)
     else:
-        # ── Mesin Gemini (kuota harian per paket) ────────────────────────────
-        quota = check_and_reserve(user.uid, tier)
-        if not quota["allowed"]:
-            reset = quota["resetAt"]
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={
-                    "code": "RATE_LIMITED",
-                    "message": (
-                        f"Kuota paket {tier.name} sudah habis "
-                        f"({tier.daily_limit} dokumen per {tier.window_hours} jam). "
-                        "Tunggu sampai kuota diperbarui atau naikkan paket."
-                    ),
-                    "resetAt": reset.isoformat() if reset else None,
-                    "limit": tier.daily_limit,
-                    "windowHours": tier.window_hours,
-                },
-            )
+        # ── Mesin Gemini / Thunder Mode (kuota harian per paket) ─────────────
+        if is_admin:
+            def do_refund():
+                pass
+        else:
+            quota = check_and_reserve(user.uid, tier)
+            if not quota["allowed"]:
+                reset = quota["resetAt"]
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "code": "RATE_LIMITED",
+                        "message": (
+                            f"Kuota paket {tier.name} sudah habis "
+                            f"({tier.daily_limit} dokumen per {tier.window_hours} jam). "
+                            "Tunggu sampai kuota diperbarui atau naikkan paket."
+                        ),
+                        "resetAt": reset.isoformat() if reset else None,
+                        "limit": tier.daily_limit,
+                        "windowHours": tier.window_hours,
+                    },
+                )
+
+            def do_refund():
+                refund(user.uid)
+
         model_label = tier.model
 
         def make_stream():
             return generate_document_stream(**common)
-
-        def do_refund():
-            refund(user.uid)
 
     def event_stream():
         yield _sse({"type": "status", "stage": "Menyusun kerangka", "percent": 5, "model": model_label})
@@ -410,6 +446,16 @@ async def api_generate_document(
 
             yield _sse({"type": "status", "stage": "Selesai", "percent": 100})
             yield _sse({"type": "done"})
+        except ModelBusy:
+            # Penyedia AI penuh: sarankan menunggu, jangan suruh coba ulang
+            # segera (itu memperparah antrean). Kuota dikembalikan.
+            do_refund()
+            yield _sse({"type": "error", "message": BUSY_MESSAGE})
+        except AthenaUnavailable as exc:
+            # Masalah penyedia Athena (kunci/kuota/model): beri pesan yang benar,
+            # dan kembalikan kredit karena bukan salah pengguna.
+            do_refund()
+            yield _sse({"type": "error", "message": str(exc)})
         except Exception:
             log.exception("Streaming dokumen gagal")
             do_refund()
@@ -426,20 +472,45 @@ async def api_generate_document(
     )
 
 
-@app.post("/api/admin/claude/{uid}/grant")
-async def api_admin_grant_claude(
+@app.post("/api/admin/payments/{uid}/reject")
+async def api_admin_reject_payment(uid: str, _: CurrentUser = Depends(require_admin)):
+    """Admin menolak pengajuan pembayaran (bukti tidak sah / tidak dikirim).
+
+    Status pengguna dikembalikan ke `inactive` dan token (bila terlanjur
+    terbit) dihanguskan, sehingga tidak bisa dipakai lagi.
+    """
+    ref = db.collection(ACTIVATIONS).document(uid)
+    snap = ref.get()
+    if not snap.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NO_CLAIM", "message": "Pengguna ini belum mengajukan pembayaran."},
+        )
+    if snap.to_dict().get("status") == STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "ALREADY_ACTIVE", "message": "Langganan sudah aktif — tidak bisa ditolak."},
+        )
+
+    ref.update({"status": STATUS_REJECTED, "token": None, "rejectedAt": firestore.SERVER_TIMESTAMP})
+    db.collection("users").document(uid).update({"statusSubscription": "inactive"})
+    return {"uid": uid, "status": STATUS_REJECTED}
+
+
+@app.post("/api/admin/athena/{uid}/grant")
+async def api_admin_grant_athena(
     uid: str,
-    body: ClaudeGrantRequest,
+    body: AthenaGrantRequest,
     _: CurrentUser = Depends(require_admin),
 ):
-    """Admin menambah kredit Claude berbayar (Rp15.000/pemakaian) ke pengguna."""
+    """Admin menambah kredit Athena Mode berbayar (Rp15.000/pemakaian)."""
     snap = db.collection("users").document(uid).get()
     if not snap.exists:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "NO_USER", "message": "Pengguna tidak ditemukan."},
         )
-    return claude_grant(uid, body.count)
+    return athena_grant(uid, body.count)
 
 
 @app.get("/api/admin/users")

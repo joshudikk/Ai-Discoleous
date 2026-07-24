@@ -79,22 +79,33 @@ export async function generateDocument({ docType, title, jurusan, catatan, panja
   return full
 }
 
-/** Sisa kesempatan mesin premium Claude. */
-export async function fetchClaudeUsage() {
-  const res = await fetch(`${BASE}/api/claude-usage`, { headers: await authHeader() })
-  if (!res.ok) throw new Error('Kuota Claude gagal dimuat.')
+/** Admin: tolak pengajuan pembayaran (bukti tidak sah). */
+export async function rejectPayment(uid) {
+  const res = await fetch(`${BASE}/api/admin/payments/${uid}/reject`, {
+    method: 'POST',
+    headers: await authHeader(),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw errorFrom(data, 'Penolakan gagal.')
+  return data
+}
+
+/** Sisa kesempatan mesin premium Athena Mode. */
+export async function fetchAthenaUsage() {
+  const res = await fetch(`${BASE}/api/athena-usage`, { headers: await authHeader() })
+  if (!res.ok) throw new Error('Kuota Athena Mode gagal dimuat.')
   return res.json()
 }
 
-/** Admin: tambah kredit Claude berbayar ke pengguna. */
-export async function grantClaude(uid, count = 1) {
-  const res = await fetch(`${BASE}/api/admin/claude/${uid}/grant`, {
+/** Admin: tambah kredit Athena Mode berbayar ke pengguna. */
+export async function grantAthena(uid, count = 1) {
+  const res = await fetch(`${BASE}/api/admin/athena/${uid}/grant`, {
     method: 'POST',
     headers: await authHeader(),
     body: JSON.stringify({ count }),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.detail?.message ?? 'Gagal menambah kredit Claude.')
+  if (!res.ok) throw new Error(data.detail?.message ?? 'Gagal menambah kredit Athena Mode.')
   return data
 }
 

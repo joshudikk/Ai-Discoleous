@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getDoc as getLocalDoc, saveDoc as saveLocalDoc } from '../lib/localDocs'
-import { fetchClaudeUsage, fetchUsage, generateDocument, suggestTitles } from '../lib/api'
+import { fetchAthenaUsage, fetchUsage, generateDocument, suggestTitles } from '../lib/api'
 import { canSuggestTitles, getPackage } from '../lib/packages'
 import { waLink, ADMIN_WA_DISPLAY } from '../lib/payment'
 import GlassCard from '../components/GlassCard'
@@ -254,7 +254,7 @@ export default function GeneratorWindow() {
   const [copied, setCopied] = useState(false)
   const [usage, setUsage] = useState(null)
   const [engine, setEngine] = useState('gemini')
-  const [claudeUsage, setClaudeUsage] = useState(null)
+  const [athenaUsage, setAthenaUsage] = useState(null)
 
   const abortRef = useRef(null)
   const outputRef = useRef(null)
@@ -267,18 +267,18 @@ export default function GeneratorWindow() {
     }
   }
 
-  async function loadClaudeUsage() {
+  async function loadAthenaUsage() {
     try {
-      setClaudeUsage(await fetchClaudeUsage())
+      setAthenaUsage(await fetchAthenaUsage())
     } catch {
-      /* abaikan; toggle Claude cuma muncul kalau data ada */
+      /* abaikan; toggle Athena Mode cuma muncul kalau data ada */
     }
   }
 
   useEffect(() => {
     if (isActive) {
       loadUsage()
-      loadClaudeUsage()
+      loadAthenaUsage()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive])
@@ -375,7 +375,7 @@ export default function GeneratorWindow() {
       setPercent(100)
       setStage('Selesai')
       loadUsage()
-      if (engine === 'claude') loadClaudeUsage()
+      if (engine === 'athena') loadAthenaUsage()
     } catch (err) {
       if (err.name === 'AbortError') {
         setStage('Dihentikan')
@@ -387,10 +387,10 @@ export default function GeneratorWindow() {
         setModalMsg(err.message + sisa)
         setModalOpen(true)
         loadUsage()
-      } else if (err.code === 'CLAUDE_NO_CREDITS' || err.code === 'CLAUDE_TIER_LOCKED' || err.code === 'CLAUDE_UNCONFIGURED') {
+      } else if (err.code === 'ATHENA_NO_CREDITS' || err.code === 'ATHENA_TIER_LOCKED' || err.code === 'ATHENA_UNCONFIGURED') {
         setModalMsg(err.message)
         setModalOpen(true)
-        loadClaudeUsage()
+        loadAthenaUsage()
       } else {
         setError(err.message)
       }
@@ -570,7 +570,7 @@ export default function GeneratorWindow() {
           <GlassCard className="p-6">
             <p className="label">Langkah 2 · Pengaturan</p>
 
-            {claudeUsage?.enabled && (
+            {athenaUsage?.enabled && (
               <div className="mt-1 mb-4">
                 <span className="label">Mode AI</span>
                 <div className="grid grid-cols-2 gap-2">
@@ -578,9 +578,9 @@ export default function GeneratorWindow() {
                     Thunder Mode
                   </button>
                   <button
-                    onClick={() => setEngine('claude')}
+                    onClick={() => setEngine('athena')}
                     className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-2 font-mono text-[11px] uppercase tracking-[0.1em] transition-all duration-200 ${
-                      engine === 'claude'
+                      engine === 'athena'
                         ? 'border-glow bg-glow/10 text-[#c9a3ff] shadow-violet'
                         : 'border-white/10 text-slate-500 hover:border-glow/50 hover:text-slate-300'
                     }`}
@@ -638,25 +638,27 @@ export default function GeneratorWindow() {
               />
             </div>
 
-            {engine === 'claude'
-              ? claudeUsage && (
+            {engine === 'athena'
+              ? athenaUsage && (
                   <div className="mt-4 rounded-lg border border-glow/25 bg-glow/5 px-3.5 py-2.5">
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-[11px] text-slate-300">
                         Kesempatan Athena Mode:{' '}
-                        <span className={claudeUsage.remaining === 0 ? 'text-rose-300' : 'text-[#c9a3ff]'}>
-                          {claudeUsage.remaining}
+                        <span className={athenaUsage.remaining === 0 ? 'text-rose-300' : 'text-[#c9a3ff]'}>
+                          {athenaUsage.unlimited ? 'tanpa batas' : athenaUsage.remaining}
                         </span>
                       </span>
                       <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                        {claudeUsage.period === 'month'
-                          ? claudeUsage.resetAt
-                            ? `reset ${formatUntil(claudeUsage.resetAt)}`
-                            : 'per bulan'
-                          : 'seumur akun'}
+                        {athenaUsage.unlimited
+                          ? 'admin'
+                          : athenaUsage.period === 'month'
+                            ? athenaUsage.resetAt
+                              ? `reset ${formatUntil(athenaUsage.resetAt)}`
+                              : 'per bulan'
+                            : 'seumur akun'}
                       </span>
                     </div>
-                    {claudeUsage.remaining === 0 && (
+                    {!athenaUsage.unlimited && athenaUsage.remaining === 0 && (
                       <a
                         href={waLink('Halo admin Discoleous, saya mau beli tambahan pemakaian Athena Mode (Rp15.000/pakai).')}
                         target="_blank"
@@ -673,11 +675,15 @@ export default function GeneratorWindow() {
                     <span className="font-mono text-[11px] text-slate-400">
                       Sisa dokumen:{' '}
                       <span className={usage.remaining === 0 ? 'text-rose-300' : 'text-cyan-200'}>
-                        {usage.remaining}/{usage.limit}
+                        {usage.unlimited ? 'tanpa batas' : `${usage.remaining}/${usage.limit}`}
                       </span>
                     </span>
                     <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                      {usage.resetAt ? `reset ${formatUntil(usage.resetAt)}` : `tiap ${usage.windowHours} jam`}
+                      {usage.unlimited
+                        ? 'admin'
+                        : usage.resetAt
+                          ? `reset ${formatUntil(usage.resetAt)}`
+                          : `tiap ${usage.windowHours} jam`}
                     </span>
                   </div>
                 )}

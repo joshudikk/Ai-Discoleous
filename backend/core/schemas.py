@@ -26,8 +26,8 @@ class GenerateRequest(BaseModel):
     metode: Literal["kualitatif", "kuantitatif", "campuran", "tidak"] = "tidak"
     # Rentang tahun sumber daftar pustaka.
     pustaka: Literal["5", "10", "bebas"] = "bebas"
-    # Mesin AI: "gemini" (default) atau "claude" (premium, memakai kredit Claude).
-    engine: Literal["gemini", "claude"] = "gemini"
+    # Mesin AI: "gemini" = Thunder Mode (default), "athena" = Athena Mode (premium).
+    engine: Literal["gemini", "athena"] = "gemini"
 
 
 class MeResponse(BaseModel):
@@ -53,5 +53,5 @@ class PaymentStatusResponse(BaseModel):
     tier: str
 
 
-class ClaudeGrantRequest(BaseModel):
+class AthenaGrantRequest(BaseModel):
     count: int = Field(default=1, ge=1, le=100)

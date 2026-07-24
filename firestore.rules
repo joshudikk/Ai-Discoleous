@@ -55,8 +55,8 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Kredit mesin premium Claude—hanya backend (Admin SDK).
-    match /claude/{userId} {
+    // Kredit mesin premium "Athena Mode"—hanya backend (Admin SDK).
+    match /athena/{userId} {
       allow read, write: if false;
     }
   }

@@ -167,6 +167,26 @@ export default function Packages() {
       {/* ── Belum bayar: pilih paket + rekening + tombol sudah bayar ─── */}
       {status !== 'active' && status !== 'pending' && status !== 'verified' && (
         <>
+          {status === 'rejected' && (
+            <div className="mt-5 flex items-start gap-3 rounded-xl border border-rose-500/45 bg-rose-500/10 px-4 py-3.5">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-rose-300" />
+              <div>
+                <p className="text-sm text-rose-100">
+                  Pengajuan pembayaranmu <span className="text-rose-300">ditolak admin</span> — biasanya karena bukti
+                  transfer belum diterima atau tidak cocok.
+                </p>
+                <a
+                  href={waLink('Halo admin Discoleous, pengajuan pembayaran saya ditolak. Mohon dibantu ya.')}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-ghost mt-3 border-rose-400/50 text-rose-200 hover:border-rose-300"
+                >
+                  <MessageCircle size={14} /> Hubungi admin ({ADMIN_WA_DISPLAY})
+                </a>
+              </div>
+            </div>
+          )}
+
           <p className="mt-2 max-w-xl text-sm text-slate-400">
             Pilih paket, transfer ke salah satu rekening di bawah, lalu tekan{' '}
             <span className="text-cyan-200">Saya sudah bayar</span>. Admin akan memverifikasi dan memberi kode token

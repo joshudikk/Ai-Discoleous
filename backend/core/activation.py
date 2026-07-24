@@ -20,6 +20,7 @@ STATUS_INACTIVE = "inactive"   # baru daftar, belum bayar
 STATUS_PENDING = "pending"     # sudah klik "saya sudah bayar", menunggu admin
 STATUS_VERIFIED = "verified"   # admin sudah verifikasi, token terbit, menunggu pengguna
 STATUS_ACTIVE = "active"       # token cocok, langganan hidup
+STATUS_REJECTED = "rejected"   # admin menolak (bukti bayar tidak sah/tidak ada)
 
 # Hindari karakter yang mudah tertukar (0/O, 1/I) supaya enak didikte lewat WA.
 _ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"

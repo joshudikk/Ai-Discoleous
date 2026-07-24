@@ -122,7 +122,7 @@ maksimal 20 dokumen terbaru per akun.
 | Akun & profil (nama, email, alamat, role) | Firestore `users` |
 | Status langganan & paket | Firestore `users` |
 | Pengajuan & token aktivasi | Firestore `activations` (dikunci dari klien) |
-| Kuota pemakaian & kredit Athena | Firestore `usage`, `claude` (dikunci dari klien) |
+| Kuota pemakaian & kredit Athena | Firestore `usage`, `athena` (dikunci dari klien) |
 
 Konsekuensi yang perlu diberitahukan ke pengguna: dokumen **tidak berpindah
 antar perangkat/peramban**, dan **hilang bila data peramban dibersihkan**. Karena
@@ -130,23 +130,33 @@ itu tombol **Word** (unduh) adalah cara menyimpan permanen.
 
 ---
 
-## Mesin premium Claude (Anthropic)
+## Dua mode AI
 
-Selain Gemini, paket Sharnikas & Dikthought bisa memakai **Claude
-(`claude-opus-4-8`)** sebagai mesin premium, dengan kesempatan terbatas:
+| Mode | Mesin | Untuk paket |
+|---|---|---|
+| **Thunder Mode** | Google Gemini (`core/tiers.py` → `model`) | semua paket |
+| **Athena Mode** | OpenRouter (`ATHENA_DEFAULT_MODEL`) | Sharnikas & Dikthought |
 
-| Paket | Kesempatan Claude gratis | Beli tambahan |
+Athena Mode punya kesempatan terbatas:
+
+| Paket | Kesempatan gratis | Beli tambahan |
 |---|---|---|
 | Sharnikas | 1× (seumur akun) | Rp15.000 / pemakaian |
 | Dikthought | 3× per bulan | Rp15.000 / pemakaian |
 
-Isi `ANTHROPIC_API_KEY` di `backend/.env` untuk mengaktifkan. Kalau kosong,
-toggle Claude tidak muncul dan aplikasi tetap jalan dengan Gemini. Kredit
-tersimpan di koleksi `claude/{uid}` (dikunci total oleh aturan Firestore).
+Isi `OPENROUTER_API_KEY` di `backend/.env` untuk mengaktifkan (ambil di
+https://openrouter.ai/keys). Kalau kosong, toggle Athena Mode tidak muncul dan
+aplikasi tetap jalan dengan Thunder Mode. Kredit tersimpan di koleksi
+`athena/{uid}` (dikunci total oleh aturan Firestore).
+
+**Mengganti model** tanpa mengubah kode: isi `ATHENA_MODEL` di `.env`. Daftar
+model gratis ada di https://openrouter.ai/models?q=free. Karena OpenRouter
+memakai format API OpenAI, pindah penyedia (DeepSeek, Groq, dll.) nanti cukup
+mengganti `OPENROUTER_BASE_URL` di `services/athena_service.py` dan kuncinya.
 
 **Beli tambahan:** pengguna transfer Rp15.000 → konfirmasi ke admin via WhatsApp
-→ admin menekan **+Claude** pada baris pengguna di panel Admin (menambah 1 kredit
-lewat `POST /api/admin/claude/{uid}/grant`). Penghitungan dilakukan atomik lewat
+→ admin menekan **+Athena** pada baris pengguna di panel Admin (menambah 1 kredit
+lewat `POST /api/admin/athena/{uid}/grant`). Penghitungan dilakukan atomik lewat
 transaksi Firestore, jadi batasnya tidak bisa ditembus dari klien.
 
 ---
@@ -162,6 +172,18 @@ Langganan diaktifkan lewat token, dengan admin sebagai penjaga:
    di panel admin → status `verified`.
 3. Pengguna menghubungi admin lewat WhatsApp untuk meminta kode token, lalu
    memasukkannya di halaman **Langganan**. Token cocok → status `active`.
+
+Admin juga bisa menekan **Tolak** kalau bukti transfer tidak sah atau tidak
+dikirim: status pengguna kembali ke `inactive`, token yang terlanjur terbit
+dihanguskan, dan pengguna melihat pemberitahuan beserta tombol hubungi admin.
+
+**Admin memakai AI tanpa batas** — bebas dari cek langganan, kuota harian,
+kredit Athena, dan gerbang paket (badge kuota menampilkan "tanpa batas").
+
+**Saat penyedia AI penuh** (HTTP 429 dari Gemini maupun OpenRouter), pengguna
+tidak disuruh mencoba ulang segera, melainkan diberi tahu untuk **menunggu
+sekitar 30 menit** demi hasil maksimal — dan kuotanya dikembalikan. Pesannya ada
+di `core/errors.py` (`BUSY_MESSAGE`).
 
 Token disimpan di koleksi terpisah `activations/{uid}` yang **ditolak total oleh
 aturan Firestore** — hanya backend (Admin SDK) yang menyentuhnya. Ini mencegah
@@ -202,8 +224,9 @@ backend membalas `403` dengan `code: "TIER_LOCKED"` dan pesan yang sama.
 | `GET` | `/api/me` | Profil + paket pemanggil |
 | `POST` | `/api/suggest-titles` | 8 usulan judul per jurusan (Sharnikas/Dikthought) |
 | `POST` | `/api/generate-document` | Streaming SSE isi dokumen |
-| `GET` | `/api/claude-usage` | Sisa kesempatan mesin premium Claude |
-| `POST` | `/api/admin/claude/{uid}/grant` | Admin menambah kredit Claude berbayar (khusus admin) |
+| `POST` | `/api/admin/payments/{uid}/reject` | Admin menolak pengajuan; status kembali `inactive`, token hangus |
+| `GET` | `/api/athena-usage` | Sisa kesempatan mesin premium Athena Mode |
+| `POST` | `/api/admin/athena/{uid}/grant` | Admin menambah kredit Athena berbayar (khusus admin) |
 | `POST` | `/api/payment/claim` | Pengguna menandai sudah bayar → status `pending` |
 | `POST` | `/api/payment/redeem` | Pengguna menukar kode token → status `active` |
 | `GET` | `/api/admin/payments` | Daftar pembayaran menunggu (khusus admin) |
@@ -240,7 +263,7 @@ Environment Variables:
 | Nama | Isi |
 |---|---|
 | `GEMINI_API_KEY` | kunci dari aistudio.google.com/apikey |
-| `ANTHROPIC_API_KEY` | kunci Anthropic (opsional; kosongkan bila Athena Mode belum dipakai) |
+| `OPENROUTER_API_KEY` | kunci OpenRouter (opsional; kosongkan bila Athena Mode belum dipakai) |
 | `FIREBASE_CREDENTIALS_JSON` | **isi** `serviceAccountKey.json` (satu baris) |
 | `ALLOWED_ORIGINS` | domain frontend, mis. `https://discoleous.vercel.app` |
 

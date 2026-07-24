@@ -47,6 +47,7 @@ const STATUS_BANNER = {
   inactive: 'Langganan belum aktif. Selesaikan pembayaran agar generator bisa dipakai.',
   pending: 'Pembayaran menunggu verifikasi admin. Setelah diverifikasi, masukkan kode token untuk mengaktifkan.',
   verified: 'Pembayaran sudah diverifikasi. Masukkan kode token dari admin untuk mengaktifkan langganan.',
+  rejected: 'Pengajuan pembayaranmu ditolak admin. Hubungi admin lewat WhatsApp, lalu ajukan ulang.',
 }
 
 export default function Dashboard() {

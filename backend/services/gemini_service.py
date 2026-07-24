@@ -13,6 +13,7 @@ from google import genai
 from google.genai import types
 
 from core.config import get_settings
+from core.errors import BUSY_MESSAGE, ModelBusy
 from core.tiers import (
     Tier,
     build_prompt,
@@ -22,6 +23,16 @@ from core.tiers import (
 
 log = logging.getLogger("gemini")
 client = genai.Client(api_key=get_settings().gemini_api_key)
+
+
+def _terjemahkan(exc: Exception) -> Exception:
+    """Ubah 429/kuota habis dari Gemini jadi ModelBusy agar pesannya jelas."""
+    teks = str(exc)
+    kode = getattr(exc, "code", None)
+    if kode == 429 or "429" in teks or "RESOURCE_EXHAUSTED" in teks:
+        log.warning("Batas laju Gemini tercapai: %s", teks[:200])
+        return ModelBusy(BUSY_MESSAGE)
+    return exc
 
 
 def generate_document_stream(
@@ -42,16 +53,18 @@ def generate_document_stream(
         top_p=0.95,
     )
 
-    stream = client.models.generate_content_stream(
-        model=tier.model,
-        contents=build_prompt(doc_type, title, jurusan, catatan, panjang, metode, pustaka),
-        config=config,
-    )
-
-    for chunk in stream:
-        text = getattr(chunk, "text", None)
-        if text:
-            yield text
+    try:
+        stream = client.models.generate_content_stream(
+            model=tier.model,
+            contents=build_prompt(doc_type, title, jurusan, catatan, panjang, metode, pustaka),
+            config=config,
+        )
+        for chunk in stream:
+            text = getattr(chunk, "text", None)
+            if text:
+                yield text
+    except Exception as exc:
+        raise _terjemahkan(exc) from exc
 
 
 def suggest_titles(tier: Tier, jurusan: str, doc_type: str, keyword: str) -> list[str]:
@@ -69,11 +82,14 @@ def suggest_titles(tier: Tier, jurusan: str, doc_type: str, keyword: str) -> lis
         ),
     )
 
-    response = client.models.generate_content(
-        model=tier.model,
-        contents=build_title_prompt(jurusan, doc_type, keyword),
-        config=config,
-    )
+    try:
+        response = client.models.generate_content(
+            model=tier.model,
+            contents=build_title_prompt(jurusan, doc_type, keyword),
+            config=config,
+        )
+    except Exception as exc:
+        raise _terjemahkan(exc) from exc
 
     raw = (response.text or "").strip()
     try:

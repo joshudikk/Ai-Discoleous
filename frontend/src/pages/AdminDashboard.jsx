@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Wallet, ShieldCheck, Search, Clock, KeyRound, Copy, Check, BadgeCheck, Sparkles } from 'lucide-react'
-import { fetchAdminUsers, fetchAdminPayments, verifyPayment, grantClaude } from '../lib/api'
+import { Users, Wallet, ShieldCheck, Search, Clock, KeyRound, Copy, Check, BadgeCheck, Sparkles, XCircle } from 'lucide-react'
+import { fetchAdminUsers, fetchAdminPayments, verifyPayment, rejectPayment, grantAthena } from '../lib/api'
 import { formatIDR, getPackage } from '../lib/packages'
 import GlassCard from '../components/GlassCard'
 
@@ -38,6 +38,21 @@ function PaymentsPanel() {
     try {
       const { token } = await verifyPayment(uid)
       setItems((list) => list.map((it) => (it.uid === uid ? { ...it, status: 'verified', token } : it)))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusyUid('')
+    }
+  }
+
+  async function handleReject(uid, nama) {
+    if (!window.confirm(`Tolak pengajuan pembayaran dari ${nama || 'pengguna ini'}?\n\nStatusnya kembali "belum aktif" dan token (bila sudah terbit) dihanguskan.`)) return
+    setError('')
+    setBusyUid(uid)
+    try {
+      await rejectPayment(uid)
+      // Hilangkan dari daftar — pengajuan yang ditolak tidak menunggu lagi.
+      setItems((list) => list.filter((it) => it.uid !== uid))
     } catch (e) {
       setError(e.message)
     } finally {
@@ -91,13 +106,23 @@ function PaymentsPanel() {
                 </div>
 
                 {it.status === 'pending' ? (
-                  <button
-                    onClick={() => handleVerify(it.uid)}
-                    disabled={busyUid === it.uid}
-                    className="btn-neon shrink-0 justify-center"
-                  >
-                    <BadgeCheck size={15} /> {busyUid === it.uid ? 'Memproses…' : 'Verifikasi'}
-                  </button>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      onClick={() => handleVerify(it.uid)}
+                      disabled={busyUid === it.uid}
+                      className="btn-neon justify-center"
+                    >
+                      <BadgeCheck size={15} /> {busyUid === it.uid ? 'Memproses…' : 'Verifikasi'}
+                    </button>
+                    <button
+                      onClick={() => handleReject(it.uid, it.nama)}
+                      disabled={busyUid === it.uid}
+                      className="btn-ghost justify-center border-rose-500/50 text-rose-200 hover:border-rose-400"
+                      title="Tolak pengajuan ini"
+                    >
+                      <XCircle size={15} /> Tolak
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex shrink-0 items-center gap-2">
                     <div className="text-right">
@@ -106,6 +131,14 @@ function PaymentsPanel() {
                     </div>
                     <button onClick={() => copy(it.token, it.uid)} className="btn-ghost shrink-0" title="Salin token">
                       {copied === it.uid ? <Check size={14} className="text-lime-cyber" /> : <Copy size={14} />}
+                    </button>
+                    <button
+                      onClick={() => handleReject(it.uid, it.nama)}
+                      disabled={busyUid === it.uid}
+                      className="btn-ghost shrink-0 border-rose-500/50 text-rose-200 hover:border-rose-400"
+                      title="Batalkan verifikasi & hanguskan token"
+                    >
+                      <XCircle size={14} />
                     </button>
                   </div>
                 )}
@@ -130,8 +163,8 @@ export default function AdminDashboard() {
   const [rowTokens, setRowTokens] = useState({})
   const [copied, setCopied] = useState('')
   const [verifyError, setVerifyError] = useState('')
-  const [claudeBusy, setClaudeBusy] = useState('')
-  const [claudeCredits, setClaudeCredits] = useState({})
+  const [athenaBusy, setAthenaBusy] = useState('')
+  const [athenaCredits, setAthenaCredits] = useState({})
 
   useEffect(() => {
     fetchAdminUsers()
@@ -164,16 +197,16 @@ export default function AdminDashboard() {
     }
   }
 
-  async function grantClaudeCredit(uid) {
+  async function grantAthenaCredit(uid) {
     setVerifyError('')
-    setClaudeBusy(uid)
+    setAthenaBusy(uid)
     try {
-      const { extraCredits } = await grantClaude(uid, 1)
-      setClaudeCredits((c) => ({ ...c, [uid]: extraCredits }))
+      const { extraCredits } = await grantAthena(uid, 1)
+      setAthenaCredits((c) => ({ ...c, [uid]: extraCredits }))
     } catch (e) {
       setVerifyError(e.message)
     } finally {
-      setClaudeBusy('')
+      setAthenaBusy('')
     }
   }
 
@@ -286,16 +319,16 @@ export default function AdminDashboard() {
                         {aktif ? (
                           r.packageTier === 'sharnikas' || r.packageTier === 'dikthought' ? (
                             <div className="inline-flex items-center gap-2">
-                              {claudeCredits[r.uid] != null && (
-                                <span className="font-mono text-[10px] text-[#c9a3ff]">+{claudeCredits[r.uid]} kredit</span>
+                              {athenaCredits[r.uid] != null && (
+                                <span className="font-mono text-[10px] text-[#c9a3ff]">+{athenaCredits[r.uid]} kredit</span>
                               )}
                               <button
-                                onClick={() => grantClaudeCredit(r.uid)}
-                                disabled={claudeBusy === r.uid}
+                                onClick={() => grantAthenaCredit(r.uid)}
+                                disabled={athenaBusy === r.uid}
                                 className="btn-ghost border-glow/40 text-[#c9a3ff] hover:border-glow"
                                 title="Tambah 1 kredit Athena Mode (setelah bayar Rp15.000)"
                               >
-                                <Sparkles size={13} /> {claudeBusy === r.uid ? '…' : '+Athena'}
+                                <Sparkles size={13} /> {athenaBusy === r.uid ? '…' : '+Athena'}
                               </button>
                             </div>
                           ) : (

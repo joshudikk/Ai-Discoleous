@@ -1,12 +1,12 @@
-"""Kredit pemakaian mesin premium Claude.
+"""Kredit pemakaian mesin premium "Athena Mode".
 
-Aturan per paket (lihat Tier.claude_*):
-  - Sharnikas : 1 kali seumur akun (claude_period="never")
-  - Dikthought: 3 kali per bulan   (claude_period="month")
+Aturan per paket (lihat Tier.athena_*):
+  - Sharnikas : 1 kali seumur akun (athena_period="never")
+  - Dikthought: 3 kali per bulan   (athena_period="month")
 Setelah jatah gratis habis, pengguna bisa membeli kredit tambahan
 (Rp15.000/pemakaian) yang diberikan admin lewat endpoint grant.
 
-Data disimpan di koleksi `claude/{uid}` = { periodKey, used, extraCredits } dan
+Data disimpan di koleksi `athena/{uid}` = { periodKey, used, extraCredits } dan
 hanya disentuh backend (Admin SDK). Pemesanan slot dilakukan dalam transaksi
 Firestore supaya tidak bisa ditembus oleh dua permintaan bersamaan.
 """
@@ -18,7 +18,7 @@ from firebase_admin import firestore
 from core.firebase import db
 from core.tiers import Tier
 
-CLAUDE = "claude"
+ATHENA = "athena"
 
 
 def _now() -> datetime:
@@ -27,14 +27,14 @@ def _now() -> datetime:
 
 def _period_key(tier: Tier, now: datetime) -> str:
     """Kunci periode jatah gratis: per-bulan atau seumur akun."""
-    if tier.claude_period == "month":
+    if tier.athena_period == "month":
         return now.strftime("%Y-%m")
     return "LIFETIME"
 
 
 def _reset_at_iso(tier: Tier, now: datetime) -> str | None:
     """Kapan jatah gratis diperbarui. Untuk 'never' tidak ada (None)."""
-    if tier.claude_period != "month":
+    if tier.athena_period != "month":
         return None
     year, month = now.year, now.month
     nxt = datetime(year + (month // 12), (month % 12) + 1, 1, tzinfo=timezone.utc)
@@ -42,12 +42,12 @@ def _reset_at_iso(tier: Tier, now: datetime) -> str | None:
 
 
 def check_and_reserve(uid: str, tier: Tier) -> dict:
-    """Pesan satu pemakaian Claude secara atomik.
+    """Pesan satu pemakaian Athena secara atomik.
 
-    Mengembalikan: allowed, source ("free"|"extra"|None), freeRemaining,
+    Mengembalikan dict: allowed, source ("free"|"extra"|None), freeRemaining,
     extraCredits, resetAt.
     """
-    ref = db.collection(CLAUDE).document(uid)
+    ref = db.collection(ATHENA).document(uid)
 
     @firestore.transactional
     def _run(transaction) -> dict:
@@ -61,7 +61,7 @@ def check_and_reserve(uid: str, tier: Tier) -> dict:
             used = 0  # periode baru → jatah gratis kembali penuh
         extra = data.get("extraCredits", 0)
 
-        free_remaining = max(0, tier.claude_free - used)
+        free_remaining = max(0, tier.athena_free - used)
         reset_at = _reset_at_iso(tier, now)
 
         if free_remaining > 0:
@@ -82,8 +82,8 @@ def check_and_reserve(uid: str, tier: Tier) -> dict:
 
 
 def refund(uid: str, source: str) -> None:
-    """Kembalikan slot kalau generate Claude gagal total (best-effort)."""
-    ref = db.collection(CLAUDE).document(uid)
+    """Kembalikan slot kalau pembuatan dokumen gagal total (best-effort)."""
+    ref = db.collection(ATHENA).document(uid)
     try:
         if source == "free":
             ref.update({"used": firestore.Increment(-1)})
@@ -94,19 +94,22 @@ def refund(uid: str, source: str) -> None:
 
 
 def grant_extra(uid: str, count: int) -> dict:
-    """Admin menambah kredit Claude berbayar (Rp15.000/pemakaian)."""
-    ref = db.collection(CLAUDE).document(uid)
+    """Admin menambah kredit Athena berbayar (Rp15.000/pemakaian)."""
+    ref = db.collection(ATHENA).document(uid)
     ref.set({"extraCredits": firestore.Increment(count)}, merge=True)
     data = ref.get().to_dict() or {}
     return {"uid": uid, "extraCredits": data.get("extraCredits", 0)}
 
 
 def get_status(uid: str, tier: Tier) -> dict:
-    """Status kredit Claude untuk ditampilkan ke pengguna."""
-    if not tier.claude_enabled:
-        return {"enabled": False, "free": 0, "freeRemaining": 0, "extraCredits": 0, "remaining": 0, "period": tier.claude_period, "resetAt": None}
+    """Status kredit Athena untuk ditampilkan ke pengguna."""
+    if not tier.athena_enabled:
+        return {
+            "enabled": False, "free": 0, "freeRemaining": 0, "extraCredits": 0,
+            "remaining": 0, "period": tier.athena_period, "resetAt": None,
+        }
 
-    snap = db.collection(CLAUDE).document(uid).get()
+    snap = db.collection(ATHENA).document(uid).get()
     data = snap.to_dict() if snap.exists else {}
     now = _now()
     period = _period_key(tier, now)
@@ -115,14 +118,14 @@ def get_status(uid: str, tier: Tier) -> dict:
     if data.get("periodKey") != period:
         used = 0
     extra = data.get("extraCredits", 0)
-    free_remaining = max(0, tier.claude_free - used)
+    free_remaining = max(0, tier.athena_free - used)
 
     return {
         "enabled": True,
-        "free": tier.claude_free,
+        "free": tier.athena_free,
         "freeRemaining": free_remaining,
         "extraCredits": extra,
         "remaining": free_remaining + extra,
-        "period": tier.claude_period,
+        "period": tier.athena_period,
         "resetAt": _reset_at_iso(tier, now),
     }

@@ -7,6 +7,10 @@ harus sama dengan frontend/src/lib/packages.js.
 
 from dataclasses import dataclass, field
 
+# Model bawaan Athena Mode di OpenRouter. Nemotron 3 Ultra: 550B parameter,
+# konteks 1 juta token, dan gratis. Daftar lain: https://openrouter.ai/models?q=free
+ATHENA_DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+
 
 @dataclass(frozen=True)
 class Tier:
@@ -21,13 +25,14 @@ class Tier:
     # `window_hours` jam. Kuota diperbarui saat jendela berakhir.
     daily_limit: int = 2
     window_hours: int = 24
-    # Mesin premium Claude (Anthropic). `claude_free` = jatah gratis per periode:
-    # claude_period "never" = seumur akun, "month" = per bulan. Kredit tambahan
-    # (beli Rp15.000/pemakaian) diberikan admin dan dipakai setelah jatah gratis.
-    claude_enabled: bool = False
-    claude_model: str = "claude-opus-4-8"
-    claude_free: int = 0
-    claude_period: str = "never"
+    # Mesin premium "Athena Mode" (lewat OpenRouter). `athena_free` = jatah gratis
+    # per periode: athena_period "never" = seumur akun, "month" = per bulan.
+    # Kredit tambahan (Rp15.000/pemakaian) diberikan admin setelah jatah habis.
+    # Model bisa ditimpa lewat ATHENA_MODEL di .env tanpa mengubah kode.
+    athena_enabled: bool = False
+    athena_model: str = ATHENA_DEFAULT_MODEL
+    athena_free: int = 0
+    athena_period: str = "never"
     style: str = field(default="")
 
 
@@ -57,10 +62,9 @@ TIERS: dict[str, Tier] = {
         max_output_tokens=8192,
         daily_limit=3,
         window_hours=12,
-        claude_enabled=True,
-        claude_model="claude-opus-4-8",
-        claude_free=1,
-        claude_period="never",
+        athena_enabled=True,
+        athena_free=1,
+        athena_period="never",
         style=(
             "Tulis dengan struktur akademik yang rapi dan bernomor. Sertakan sitasi "
             "dalam teks bergaya APA (Nama, tahun) pada klaim penting, lalu tutup "
@@ -82,10 +86,9 @@ TIERS: dict[str, Tier] = {
         max_output_tokens=16384,
         daily_limit=6,
         window_hours=4,
-        claude_enabled=True,
-        claude_model="claude-opus-4-8",
-        claude_free=3,
-        claude_period="month",
+        athena_enabled=True,
+        athena_free=3,
+        athena_period="month",
         style=(
             "Tulis pada tingkat analisis mendalam: bandingkan sudut pandang, ajukan "
             "argumen kritis beserta bantahannya, hubungkan temuan dengan kerangka "
