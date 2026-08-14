@@ -15,10 +15,14 @@ export default {
           cyber: '#00ff87',
         },
       },
+      // Seluruh UI memakai Times New Roman. Di perangkat tanpa Times New Roman
+      // (mis. HP Android) dipakai "Tinos" — kembaran TNR yang dimuat dari web —
+      // supaya tampilan sama persis di desktop & HP, dan TIDAK jatuh ke font
+      // sambung/cursive lagi.
       fontFamily: {
-        display: ['"Comic Sans MS"', '"Comic Sans"', '"Chalkboard SE"', 'cursive'],
-        sans: ['"Comic Sans MS"', '"Comic Sans"', '"Chalkboard SE"', 'cursive'],
-        mono: ['"Comic Sans MS"', '"Comic Sans"', '"Chalkboard SE"', 'monospace'],
+        display: ['"Times New Roman"', 'Tinos', '"Liberation Serif"', 'Georgia', 'serif'],
+        sans: ['"Times New Roman"', 'Tinos', '"Liberation Serif"', 'Georgia', 'serif'],
+        mono: ['"Times New Roman"', 'Tinos', '"Liberation Serif"', 'Georgia', 'serif'],
       },
       boxShadow: {
         'neon-sm': '0 0 15px rgba(0,242,254,0.10)',
