@@ -90,6 +90,17 @@ export async function rejectPayment(uid) {
   return data
 }
 
+/** Admin: nonaktifkan langganan pengguna (kembali ke belum aktif). */
+export async function deactivateUser(uid) {
+  const res = await fetch(`${BASE}/api/admin/users/${uid}/deactivate`, {
+    method: 'POST',
+    headers: await authHeader(),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw errorFrom(data, 'Gagal menonaktifkan.')
+  return data
+}
+
 /** Sisa kesempatan mesin premium Athena Mode. */
 export async function fetchAthenaUsage() {
   const res = await fetch(`${BASE}/api/athena-usage`, { headers: await authHeader() })

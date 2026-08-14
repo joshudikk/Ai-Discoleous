@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Wallet, ShieldCheck, Search, Clock, KeyRound, Copy, Check, BadgeCheck, Sparkles, XCircle } from 'lucide-react'
-import { fetchAdminUsers, fetchAdminPayments, verifyPayment, rejectPayment, grantAthena } from '../lib/api'
+import { Users, Wallet, ShieldCheck, Search, Clock, KeyRound, Copy, Check, BadgeCheck, Sparkles, XCircle, Ban } from 'lucide-react'
+import { fetchAdminUsers, fetchAdminPayments, verifyPayment, rejectPayment, grantAthena, deactivateUser } from '../lib/api'
 import { formatIDR, getPackage } from '../lib/packages'
 import GlassCard from '../components/GlassCard'
 
@@ -210,6 +210,20 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleDeactivate(uid, nama) {
+    if (!window.confirm(`Nonaktifkan langganan ${nama || 'pengguna ini'}?\n\nStatusnya kembali "belum aktif" dan token dihanguskan. Pengguna harus mengajukan & diverifikasi ulang.`)) return
+    setVerifyError('')
+    setBusyUid(uid)
+    try {
+      await deactivateUser(uid)
+      setRows((list) => list.map((r) => (r.uid === uid ? { ...r, statusSubscription: 'inactive' } : r)))
+    } catch (e) {
+      setVerifyError(e.message)
+    } finally {
+      setBusyUid('')
+    }
+  }
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     if (!s) return rows
@@ -317,23 +331,33 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         {aktif ? (
-                          r.packageTier === 'sharnikas' || r.packageTier === 'dikthought' ? (
-                            <div className="inline-flex items-center gap-2">
-                              {athenaCredits[r.uid] != null && (
-                                <span className="font-mono text-[10px] text-[#c9a3ff]">+{athenaCredits[r.uid]} kredit</span>
-                              )}
+                          <div className="inline-flex items-center gap-2">
+                            {(r.packageTier === 'sharnikas' || r.packageTier === 'dikthought') && (
+                              <>
+                                {athenaCredits[r.uid] != null && (
+                                  <span className="font-mono text-[10px] text-[#c9a3ff]">+{athenaCredits[r.uid]} kredit</span>
+                                )}
+                                <button
+                                  onClick={() => grantAthenaCredit(r.uid)}
+                                  disabled={athenaBusy === r.uid}
+                                  className="btn-ghost border-glow/40 text-[#c9a3ff] hover:border-glow"
+                                  title="Tambah 1 kredit Athena Mode (setelah bayar Rp15.000)"
+                                >
+                                  <Sparkles size={13} /> {athenaBusy === r.uid ? '…' : '+Athena'}
+                                </button>
+                              </>
+                            )}
+                            {r.role !== 'admin' && (
                               <button
-                                onClick={() => grantAthenaCredit(r.uid)}
-                                disabled={athenaBusy === r.uid}
-                                className="btn-ghost border-glow/40 text-[#c9a3ff] hover:border-glow"
-                                title="Tambah 1 kredit Athena Mode (setelah bayar Rp15.000)"
+                                onClick={() => handleDeactivate(r.uid, r.nama)}
+                                disabled={busyUid === r.uid}
+                                className="btn-ghost border-rose-500/50 text-rose-200 hover:border-rose-400"
+                                title="Nonaktifkan langganan"
                               >
-                                <Sparkles size={13} /> {athenaBusy === r.uid ? '…' : '+Athena'}
+                                <Ban size={13} /> {busyUid === r.uid ? '…' : 'Nonaktifkan'}
                               </button>
-                            </div>
-                          ) : (
-                            <span className="font-mono text-[11px] text-slate-600">—</span>
-                          )
+                            )}
+                          </div>
                         ) : rowTokens[r.uid] ? (
                           <div className="inline-flex items-center gap-2">
                             <span className="font-mono text-sm font-bold tracking-[0.2em] text-lime-cyber">

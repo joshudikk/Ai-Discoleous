@@ -497,6 +497,27 @@ async def api_admin_reject_payment(uid: str, _: CurrentUser = Depends(require_ad
     return {"uid": uid, "status": STATUS_REJECTED}
 
 
+@app.post("/api/admin/users/{uid}/deactivate")
+async def api_admin_deactivate_user(uid: str, _: CurrentUser = Depends(require_admin)):
+    """Admin menonaktifkan langganan pengguna yang sudah aktif (atau status apa pun).
+
+    Status kembali ke `inactive` dan token aktivasi (bila ada) dihanguskan supaya
+    tidak bisa dipakai lagi. Pengguna harus mengajukan & diverifikasi ulang.
+    """
+    snap = db.collection("users").document(uid).get()
+    if not snap.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NO_USER", "message": "Pengguna tidak ditemukan."},
+        )
+    db.collection("users").document(uid).update({"statusSubscription": "inactive"})
+    # Kosongkan catatan aktivasi kalau ada.
+    act = db.collection(ACTIVATIONS).document(uid)
+    if act.get().exists:
+        act.update({"status": STATUS_REJECTED, "token": None, "rejectedAt": firestore.SERVER_TIMESTAMP})
+    return {"uid": uid, "status": "inactive"}
+
+
 @app.post("/api/admin/athena/{uid}/grant")
 async def api_admin_grant_athena(
     uid: str,
