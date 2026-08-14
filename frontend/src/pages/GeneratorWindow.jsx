@@ -10,6 +10,7 @@ import { getDoc as getLocalDoc, saveDoc as saveLocalDoc } from '../lib/localDocs
 import { fetchAthenaUsage, fetchUsage, generateDocument, suggestTitles } from '../lib/api'
 import { canSuggestTitles, getPackage } from '../lib/packages'
 import { waLink, ADMIN_WA_DISPLAY } from '../lib/payment'
+import { downloadDocx } from '../lib/exportDocx'
 import GlassCard from '../components/GlassCard'
 import UpgradeModal from '../components/UpgradeModal'
 import CyberLoader from '../components/CyberLoader'
@@ -422,40 +423,15 @@ export default function GeneratorWindow() {
     setTimeout(() => setCopied(false), 1800)
   }
 
-  function handleDownload() {
-    // Dokumen Word (.doc berbasis HTML): kertas A4, margin 4-3-3-3 (kiri 4cm,
-    // atas/kanan/bawah 3cm), teks rata kanan-kiri (justify), judul/heading tebal.
-    const judul = title.trim() || meta.name
-    const bodyHtml = mdToHtml(`# ${judul}\n\n${output}`)
-    const styles =
-      '@page WordSection1 { size:21.0cm 29.7cm; margin:3cm 3cm 3cm 4cm; }' + // atas kanan bawah kiri
-      'div.WordSection1 { page:WordSection1; }' +
-      "body { font-family:'Times New Roman',serif; font-size:12pt; line-height:1.5; text-align:justify; }" +
-      'p { text-align:justify; margin:0 0 8pt 0; }' +
-      // Semua judul/heading (BAB, Pendahuluan, Metode, dst.) 14pt tebal
-      'h1,h2,h3,h4,h5,h6 { font-size:14pt; font-weight:bold; text-align:left; margin:12pt 0 6pt 0; line-height:1.3; }' +
-      'h1 { text-align:center; }' +
-      'ul,ol { text-align:justify; margin:0 0 8pt 1.2cm; }' +
-      'li { margin:0 0 4pt 0; }' +
-      // Tabel: bergaris penuh, header tebal & rata tengah, isi rata kiri
-      'table { border-collapse:collapse; width:100%; margin:10pt 0; }' +
-      'th,td { border:1px solid #000000; padding:4pt 6pt; text-align:left; vertical-align:top; line-height:1.2; }' +
-      'th { font-weight:bold; text-align:center; background:#e8e8e8; }' +
-      // Rumus matematika: paragraf tersendiri, rata tengah
-      "p.rumus { text-align:center; margin:10pt 0; font-family:'Cambria Math','Times New Roman',serif; }" +
-      "pre { font-family:'Courier New',monospace; font-size:11pt; white-space:pre-wrap; text-align:left; margin:8pt 0; }"
-    const doc =
-      "<!DOCTYPE html><html xmlns:o='urn:schemas-microsoft-com:office:office' " +
-      "xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>" +
-      `<head><meta charset='utf-8'><title>${escapeHtml(judul)}</title><style>${styles}</style></head>` +
-      `<body><div class="WordSection1">${bodyHtml}</div></body></html>`
-    const blob = new Blob(['﻿', doc], { type: 'application/msword' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${judul.slice(0, 60)}.doc`
-    a.click()
-    URL.revokeObjectURL(url)
+  async function handleDownload() {
+    // .docx ASLI: tampil sama di HP & laptop, font Comic Sans, margin 4-3-3-3,
+    // teks justify, judul/heading 14pt tebal, tabel & rumus rapi.
+    setError('')
+    try {
+      await downloadDocx(output, title.trim() || meta.name)
+    } catch {
+      setError('Gagal membuat file Word. Coba lagi sebentar.')
+    }
   }
 
   return (
@@ -746,11 +722,18 @@ export default function GeneratorWindow() {
             {output ? (
               <div
                 ref={outputRef}
-                className="flex-1 overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/5
+                className="flex-1 overflow-y-auto rounded-xl border border-white/5
                            bg-slate-950/50 p-6 text-[15px] leading-[1.85] text-slate-200"
               >
-                {output}
-                {running && <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-cyan-neon align-middle" />}
+                {running ? (
+                  <div className="whitespace-pre-wrap">
+                    {output}
+                    <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-cyan-neon align-middle" />
+                  </div>
+                ) : (
+                  // Setelah selesai: tampilkan rapi (tebal diterapkan, tanda bintang hilang)
+                  <div className="docx-preview" dangerouslySetInnerHTML={{ __html: mdToHtml(output) }} />
+                )}
               </div>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center text-center">

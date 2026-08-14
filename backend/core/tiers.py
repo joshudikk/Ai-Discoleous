@@ -173,9 +173,23 @@ DOC_LABEL = {"makalah": "Makalah", "esai": "Esai", "kti": "Karya Tulis Ilmiah"}
 
 
 def build_system_instruction(tier: Tier, doc_type: str) -> str:
+    label = DOC_LABEL.get(doc_type, "Makalah")
+    penegasan_jenis = (
+        f"JENIS DOKUMEN YANG DIMINTA: {label}. Ikuti PERSIS struktur {label} pada "
+        "bagian 'Struktur wajib' di bawah, dan JANGAN memakai struktur jenis lain. "
+    )
+    if doc_type == "esai":
+        penegasan_jenis += (
+            "Esai ditulis mengalir dalam paragraf tanpa penomoran BAB, tanpa "
+            "sub-bab bernomor, dan tanpa daftar isi. "
+        )
+    else:
+        penegasan_jenis += "Gunakan penomoran BAB dan sub-bab sesuai struktur. "
+
     return (
         "Kamu adalah asisten penulisan akademik berbahasa Indonesia yang membantu "
         "mahasiswa menyusun draf tulisan.\n\n"
+        f"{penegasan_jenis}\n\n"
         f"{tier.style}\n\n"
         "Aturan yang tidak boleh dilanggar:\n"
         "- Keluarkan hanya isi dokumen dalam format Markdown. Tanpa basa-basi pembuka "
