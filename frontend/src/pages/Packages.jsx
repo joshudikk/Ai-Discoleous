@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { PACKAGES, getPackage, formatIDR } from '../lib/packages'
 import { PAYMENT_ACCOUNTS, waLink, ADMIN_WA_DISPLAY } from '../lib/payment'
-import { claimPayment, redeemToken } from '../lib/api'
+import { claimPayment, redeemToken, checkPromo } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import PackageCard from '../components/PackageCard'
 import GlassCard from '../components/GlassCard'
@@ -27,8 +27,39 @@ export default function Packages() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
 
+  // Promo/diskon
+  const [promoInput, setPromoInput] = useState('')
+  const [promo, setPromo] = useState(null) // { code, discountPercent }
+  const [promoBusy, setPromoBusy] = useState(false)
+  const [promoError, setPromoError] = useState('')
+
   const selectedPkg = getPackage(selected)
   const currentPkg = getPackage(profile?.packageTier)
+
+  const discount = promo?.discountPercent ?? 0
+  const finalPrice = Math.round((selectedPkg.price * (100 - discount)) / 100)
+
+  async function applyPromo() {
+    const code = promoInput.trim()
+    if (!code) return
+    setPromoError('')
+    setPromoBusy(true)
+    try {
+      const p = await checkPromo(code)
+      setPromo(p)
+    } catch (e) {
+      setPromo(null)
+      setPromoError(e.message)
+    } finally {
+      setPromoBusy(false)
+    }
+  }
+
+  function clearPromo() {
+    setPromo(null)
+    setPromoInput('')
+    setPromoError('')
+  }
 
   const copy = async (value, key) => {
     try {
@@ -45,7 +76,7 @@ export default function Packages() {
     setBusy(true)
     try {
       // Status berubah lewat Firestore onSnapshot -> AuthContext, UI ikut pindah sendiri.
-      await claimPayment(selected)
+      await claimPayment(selected, promo?.code ?? '')
     } catch (e) {
       setError(e.message)
     } finally {
@@ -227,10 +258,50 @@ export default function Packages() {
                   </div>
                 ))}
               </div>
-              <p className="mt-4 font-mono text-[11px] leading-relaxed text-slate-500">
-                Nominal: <span className="text-cyan-200">{formatIDR(selectedPkg.price)}</span> untuk paket{' '}
-                <span className="text-cyan-200">{selectedPkg.name}</span>.
-              </p>
+              {/* Kode promo */}
+              <div className="mt-4">
+                <span className="label">Kode promo (opsional)</span>
+                {promo ? (
+                  <div className="flex items-center justify-between rounded-lg border border-lime-cyber/40 bg-lime-cyber/10 px-3.5 py-2.5">
+                    <span className="font-mono text-[12px] text-lime-cyber">
+                      {promo.code} · diskon {promo.discountPercent}%
+                    </span>
+                    <button onClick={clearPromo} className="font-mono text-[11px] text-slate-400 transition hover:text-rose-300">
+                      Hapus
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === 'Enter' && applyPromo()}
+                      placeholder="mis. DISKON20"
+                      className="field flex-1 font-mono uppercase"
+                    />
+                    <button onClick={applyPromo} disabled={promoBusy || !promoInput.trim()} className="btn-ghost shrink-0">
+                      {promoBusy ? '…' : 'Terapkan'}
+                    </button>
+                  </div>
+                )}
+                {promoError && <p className="mt-1.5 text-xs text-rose-300">{promoError}</p>}
+              </div>
+
+              {/* Nominal (ikut diskon bila ada) */}
+              <div className="mt-4 rounded-lg border border-cyan-500/15 bg-void/40 px-3.5 py-3">
+                <p className="font-mono text-[11px] text-slate-500">
+                  Yang ditransfer untuk paket <span className="text-cyan-200">{selectedPkg.name}</span>:
+                </p>
+                {discount > 0 ? (
+                  <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-mono text-sm text-slate-500 line-through">{formatIDR(selectedPkg.price)}</span>
+                    <span className="font-display text-xl font-bold text-lime-cyber">{formatIDR(finalPrice)}</span>
+                    <span className="font-mono text-[11px] text-lime-cyber">hemat {discount}%</span>
+                  </p>
+                ) : (
+                  <p className="mt-1 font-display text-xl font-bold text-cyan-200">{formatIDR(selectedPkg.price)}</p>
+                )}
+              </div>
             </GlassCard>
 
             <GlassCard className="p-6">
@@ -252,7 +323,11 @@ export default function Packages() {
                 {busy ? 'Mengirim…' : 'Saya sudah bayar'} <ArrowRight size={16} />
               </button>
               <a
-                href={waLink(`Halo admin Discoleous, saya ingin bayar paket ${selectedPkg.name} (${formatIDR(selectedPkg.price)}).`)}
+                href={waLink(
+                  discount > 0
+                    ? `Halo admin Discoleous, saya bayar paket ${selectedPkg.name} pakai promo ${promo.code} (${formatIDR(finalPrice)}, diskon ${discount}%).`
+                    : `Halo admin Discoleous, saya ingin bayar paket ${selectedPkg.name} (${formatIDR(selectedPkg.price)}).`,
+                )}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-ghost mt-3 w-full justify-center"

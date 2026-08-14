@@ -59,5 +59,10 @@ service cloud.firestore {
     match /athena/{userId} {
       allow read, write: if false;
     }
+
+    // Kode promo—hanya backend (Admin SDK). Pelanggan memvalidasi lewat endpoint.
+    match /promos/{code} {
+      allow read, write: if false;
+    }
   }
 }

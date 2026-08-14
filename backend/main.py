@@ -30,6 +30,7 @@ from core.activation import (
     normalize_token,
 )
 from core.errors import BUSY_MESSAGE, ModelBusy
+from core.promos import create_promo, delete_promo, get_promo, list_promos, price_after
 from core.athena_credits import (
     check_and_reserve as athena_reserve,
     get_status as athena_status,
@@ -44,6 +45,8 @@ from core.schemas import (
     GenerateRequest,
     MeResponse,
     PaymentStatusResponse,
+    PromoCheckRequest,
+    PromoCreateRequest,
     RedeemTokenRequest,
     SuggestTitlesRequest,
     SuggestTitlesResponse,
@@ -152,6 +155,11 @@ async def payment_claim(
     """
     tier = get_tier(body.packageTier)
 
+    # Terapkan diskon promo (kalau ada & valid) untuk merekam harga akhir.
+    promo = get_promo(body.promoCode) if body.promoCode else None
+    discount = promo["discountPercent"] if promo else 0
+    final_price = price_after(tier.price, discount)
+
     db.collection("users").document(user.uid).update(
         {"packageTier": tier.id, "statusSubscription": STATUS_PENDING}
     )
@@ -164,12 +172,44 @@ async def payment_claim(
             "status": STATUS_PENDING,
             "token": None,
             "attempts": 0,
+            "price": tier.price,
+            "promoCode": promo["code"] if promo else None,
+            "discountPercent": discount,
+            "finalPrice": final_price,
             "claimedAt": firestore.SERVER_TIMESTAMP,
             "verifiedAt": None,
             "activatedAt": None,
         }
     )
     return PaymentStatusResponse(status=STATUS_PENDING, tier=tier.id)
+
+
+@app.post("/api/promo/check")
+async def api_promo_check(body: PromoCheckRequest, _: CurrentUser = Depends(get_current_user)):
+    """Pelanggan memvalidasi kode promo. Balikkan diskonnya kalau valid."""
+    promo = get_promo(body.code)
+    if not promo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "PROMO_INVALID", "message": "Kode promo tidak ditemukan atau sudah tidak aktif."},
+        )
+    return promo
+
+
+@app.get("/api/admin/promos")
+async def api_admin_list_promos(_: CurrentUser = Depends(require_admin)):
+    return list_promos()
+
+
+@app.post("/api/admin/promos")
+async def api_admin_create_promo(body: PromoCreateRequest, _: CurrentUser = Depends(require_admin)):
+    return create_promo(body.code, body.discountPercent)
+
+
+@app.post("/api/admin/promos/{code}/delete")
+async def api_admin_delete_promo(code: str, _: CurrentUser = Depends(require_admin)):
+    delete_promo(code)
+    return {"code": code.upper(), "deleted": True}
 
 
 @app.post("/api/payment/redeem", response_model=PaymentStatusResponse)
@@ -235,6 +275,9 @@ async def api_admin_payments(_: CurrentUser = Depends(require_admin)):
                 "status": x.get("status", STATUS_PENDING),
                 # Token hanya diberikan ke admin setelah diverifikasi.
                 "token": x.get("token") if x.get("status") == STATUS_VERIFIED else None,
+                "promoCode": x.get("promoCode"),
+                "discountPercent": x.get("discountPercent", 0),
+                "finalPrice": x.get("finalPrice"),
                 "claimedAt": _iso(x.get("claimedAt")),
                 "verifiedAt": _iso(x.get("verifiedAt")),
             }

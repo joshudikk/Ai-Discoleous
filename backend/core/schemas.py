@@ -42,6 +42,16 @@ class MeResponse(BaseModel):
 
 class ClaimPaymentRequest(BaseModel):
     packageTier: Literal["faozonica", "sharnikas", "dikthought"]
+    promoCode: str = Field(default="", max_length=32)
+
+
+class PromoCreateRequest(BaseModel):
+    code: str = Field(min_length=2, max_length=32)
+    discountPercent: int = Field(ge=1, le=100)
+
+
+class PromoCheckRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
 
 
 class RedeemTokenRequest(BaseModel):

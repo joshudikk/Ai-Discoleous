@@ -141,15 +141,56 @@ function errorFrom(data, fallback) {
 }
 
 /** Pengguna menandai sudah membayar paket tertentu. Status pindah ke 'pending'. */
-export async function claimPayment(packageTier) {
+export async function claimPayment(packageTier, promoCode = '') {
   const res = await fetch(`${BASE}/api/payment/claim`, {
     method: 'POST',
     headers: await authHeader(),
-    body: JSON.stringify({ packageTier }),
+    body: JSON.stringify({ packageTier, promoCode }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw errorFrom(data, 'Gagal mengirim konfirmasi pembayaran.')
   return data
+}
+
+/** Pelanggan memvalidasi kode promo. Melempar error kalau tidak valid. */
+export async function checkPromo(code) {
+  const res = await fetch(`${BASE}/api/promo/check`, {
+    method: 'POST',
+    headers: await authHeader(),
+    body: JSON.stringify({ code }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw errorFrom(data, 'Kode promo tidak valid.')
+  return data // { code, discountPercent }
+}
+
+/** Admin: daftar semua kode promo. */
+export async function listPromos() {
+  const res = await fetch(`${BASE}/api/admin/promos`, { headers: await authHeader() })
+  if (!res.ok) throw new Error('Data promo gagal dimuat.')
+  return res.json()
+}
+
+/** Admin: buat/perbarui kode promo. */
+export async function createPromo(code, discountPercent) {
+  const res = await fetch(`${BASE}/api/admin/promos`, {
+    method: 'POST',
+    headers: await authHeader(),
+    body: JSON.stringify({ code, discountPercent }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw errorFrom(data, 'Gagal membuat promo.')
+  return data
+}
+
+/** Admin: hapus kode promo. */
+export async function deletePromo(code) {
+  const res = await fetch(`${BASE}/api/admin/promos/${encodeURIComponent(code)}/delete`, {
+    method: 'POST',
+    headers: await authHeader(),
+  })
+  if (!res.ok) throw new Error('Gagal menghapus promo.')
+  return res.json()
 }
 
 /** Pengguna menukar kode token dari admin. Kalau cocok, langganan jadi aktif. */

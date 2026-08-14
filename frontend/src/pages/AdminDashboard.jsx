@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Wallet, ShieldCheck, Search, Clock, KeyRound, Copy, Check, BadgeCheck, Sparkles, XCircle, Ban } from 'lucide-react'
-import { fetchAdminUsers, fetchAdminPayments, verifyPayment, rejectPayment, grantAthena, deactivateUser } from '../lib/api'
+import { Users, Wallet, ShieldCheck, Search, Clock, KeyRound, Copy, Check, BadgeCheck, Sparkles, XCircle, Ban, Percent, Plus, Trash2 } from 'lucide-react'
+import { fetchAdminUsers, fetchAdminPayments, verifyPayment, rejectPayment, grantAthena, deactivateUser, listPromos, createPromo, deletePromo } from '../lib/api'
 import { formatIDR, getPackage } from '../lib/packages'
 import GlassCard from '../components/GlassCard'
 
@@ -16,6 +16,103 @@ const STATUS_META = {
   verified: { label: 'token terbit', tone: 'text-cyan-200', dot: 'bg-cyan-neon' },
   pending: { label: 'menunggu', tone: 'text-amber-300', dot: 'bg-amber-400' },
   inactive: { label: 'belum aktif', tone: 'text-amber-300', dot: 'bg-amber-400' },
+}
+
+function PromoPanel() {
+  const [promos, setPromos] = useState([])
+  const [code, setCode] = useState('')
+  const [pct, setPct] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = () => listPromos().then(setPromos).catch((e) => setError(e.message))
+  useEffect(() => {
+    load()
+  }, [])
+
+  async function handleCreate() {
+    const c = code.trim()
+    const p = parseInt(pct, 10)
+    if (!c || !(p >= 1 && p <= 100)) {
+      setError('Isi kode dan diskon 1–100%.')
+      return
+    }
+    setError('')
+    setBusy(true)
+    try {
+      await createPromo(c, p)
+      setCode('')
+      setPct('')
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(c) {
+    if (!window.confirm(`Hapus kode promo ${c}?`)) return
+    try {
+      await deletePromo(c)
+      setPromos((l) => l.filter((x) => x.code !== c))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  return (
+    <GlassCard className="mt-8 p-6">
+      <div className="flex items-center gap-2.5">
+        <Percent size={16} className="text-lime-cyber" />
+        <p className="label mb-0">Kode promo / diskon</p>
+      </div>
+
+      {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="KODE (mis. DISKON20)"
+          className="field flex-1 font-mono uppercase"
+        />
+        <input
+          value={pct}
+          onChange={(e) => setPct(e.target.value.replace(/\D/g, ''))}
+          placeholder="Diskon %"
+          inputMode="numeric"
+          className="field sm:w-32"
+        />
+        <button onClick={handleCreate} disabled={busy} className="btn-neon shrink-0 justify-center">
+          <Plus size={15} /> {busy ? 'Menyimpan…' : 'Buat'}
+        </button>
+      </div>
+
+      {promos.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {promos.map((p) => (
+            <div key={p.code} className="flex items-center justify-between rounded-lg border border-cyan-500/20 bg-void/40 px-4 py-2.5">
+              <span className="font-mono text-sm text-white">
+                {p.code} <span className="text-lime-cyber">· diskon {p.discountPercent}%</span>
+              </span>
+              <button
+                onClick={() => handleDelete(p.code)}
+                className="btn-ghost border-rose-500/40 text-rose-200 hover:border-rose-400"
+                title="Hapus kode"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-3 font-mono text-[11px] text-slate-500">
+        Pelanggan mengetik kode ini di halaman Langganan → harga otomatis terpotong.
+      </p>
+    </GlassCard>
+  )
 }
 
 function PaymentsPanel() {
@@ -101,7 +198,10 @@ function PaymentsPanel() {
                   <p className="truncate text-sm text-slate-200">{it.nama || '(tanpa nama)'}</p>
                   <p className="truncate font-mono text-[12px] text-slate-400">{it.email}</p>
                   <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-300/70">
-                    {pkg.name} · {formatIDR(pkg.price)}
+                    {pkg.name} · {formatIDR(it.finalPrice ?? pkg.price)}
+                    {it.discountPercent > 0 && (
+                      <span className="ml-1 text-lime-cyber">(promo {it.promoCode} −{it.discountPercent}%)</span>
+                    )}
                   </p>
                 </div>
 
@@ -264,6 +364,8 @@ export default function AdminDashboard() {
       </div>
 
       <PaymentsPanel />
+
+      <PromoPanel />
 
       <GlassCard className="mt-7 overflow-hidden p-0">
         <div className="flex items-center gap-3 border-b border-cyan-500/15 px-5 py-3.5">
