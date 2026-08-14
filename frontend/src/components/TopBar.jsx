@@ -32,8 +32,12 @@ export default function TopBar() {
             {pkg.name}
           </span>
           {isAdmin && (
-            <Link to="/admin" className="btn-ghost" title="Panel admin">
-              <Shield size={14} /> <span className="hidden sm:inline">Admin</span>
+            <Link
+              to="/admin"
+              className="btn-ghost border-amber-400/60 text-amber-200 hover:border-amber-300"
+              title="Panel admin"
+            >
+              <Shield size={14} /> Admin
             </Link>
           )}
           <Link to="/dashboard" className="btn-ghost">
