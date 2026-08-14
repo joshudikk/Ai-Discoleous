@@ -20,6 +20,10 @@ import {
   WidthType,
   convertMillimetersToTwip,
 } from 'docx'
+import JSZip from 'jszip'
+
+// Font pengganti kalau Comic Sans MS tidak terpasang (mis. di HP Android).
+const FALLBACK_FONT = 'Times New Roman'
 
 const FONT = 'Comic Sans MS'
 const SZ_BODY = 24 // 12pt (satuan half-point)
@@ -226,6 +230,39 @@ function markdownToBlocks(md) {
   return blocks
 }
 
+// Sisipkan altName (font pengganti) ke tabel font Word. Word memakai font ini
+// otomatis kalau Comic Sans MS tidak ada di perangkat — jadi minimal jadi
+// Times New Roman, bukan font acak.
+async function patchFontFallback(blob) {
+  try {
+    const zip = await JSZip.loadAsync(blob)
+    const path = 'word/fontTable.xml'
+    const file = zip.file(path)
+    if (!file) return blob
+    let xml = await file.async('string')
+    const ALT = `<w:altName w:val="${FALLBACK_FONT}"/>`
+    const ENTRY =
+      `<w:font w:name="${FONT}">${ALT}<w:charset w:val="00"/>` +
+      '<w:family w:val="script"/><w:pitch w:val="variable"/></w:font>'
+    if (new RegExp(`w:name="${FONT}"`).test(xml)) {
+      if (!xml.includes(ALT)) {
+        xml = xml.replace(new RegExp(`(<w:font w:name="${FONT}"[^>]*>)`), `$1${ALT}`)
+      }
+    } else if (/<w:fonts\b[^>]*\/>/.test(xml)) {
+      xml = xml.replace(/(<w:fonts\b[^>]*)\/>/, `$1>${ENTRY}</w:fonts>`)
+    } else {
+      xml = xml.replace('</w:fonts>', `${ENTRY}</w:fonts>`)
+    }
+    zip.file(path, xml)
+    return zip.generateAsync({
+      type: 'blob',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+  } catch {
+    return blob // kalau patch gagal, pakai file apa adanya (Comic Sans tetap primer)
+  }
+}
+
 /** Bangun Blob .docx dari teks Markdown. */
 export async function buildDocx(markdown) {
   const M = convertMillimetersToTwip
@@ -240,7 +277,8 @@ export async function buildDocx(markdown) {
       },
     ],
   })
-  return Packer.toBlob(doc)
+  const blob = await Packer.toBlob(doc)
+  return patchFontFallback(blob)
 }
 
 /** Bangun & unduh langsung. */
