@@ -22,10 +22,10 @@ import {
 } from 'docx'
 import JSZip from 'jszip'
 
-// Font pengganti kalau Comic Sans MS tidak terpasang (mis. di HP Android).
-const FALLBACK_FONT = 'Times New Roman'
+// Font pengganti kalau font utama tidak terpasang (mis. di HP Android).
+const FALLBACK_FONT = 'Georgia'
 
-const FONT = 'Comic Sans MS'
+const FONT = 'Times New Roman'
 const SZ_BODY = 24 // 12pt (satuan half-point)
 const SZ_HEAD = 28 // 14pt
 
@@ -243,7 +243,7 @@ async function patchFontFallback(blob) {
     const ALT = `<w:altName w:val="${FALLBACK_FONT}"/>`
     const ENTRY =
       `<w:font w:name="${FONT}">${ALT}<w:charset w:val="00"/>` +
-      '<w:family w:val="script"/><w:pitch w:val="variable"/></w:font>'
+      '<w:family w:val="roman"/><w:pitch w:val="variable"/></w:font>'
     if (new RegExp(`w:name="${FONT}"`).test(xml)) {
       if (!xml.includes(ALT)) {
         xml = xml.replace(new RegExp(`(<w:font w:name="${FONT}"[^>]*>)`), `$1${ALT}`)

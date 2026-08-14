@@ -95,8 +95,9 @@
 }
 
 /* Tampilan pratinjau dokumen (hasil generate yang sudah dirapikan) */
-/* Font mengikuti dokumen Word: Comic Sans kalau ada, kalau tidak Times New Roman. */
-.docx-preview { font-family: 'Comic Sans MS', 'Times New Roman', Georgia, serif; }
+/* Pratinjau memakai Times New Roman; di HP tanpa TNR dipakai Tinos (kembaran
+   TNR yang dimuat dari web) supaya tampilan desktop & HP sama persis. */
+.docx-preview { font-family: 'Times New Roman', 'Tinos', 'Liberation Serif', Georgia, serif; }
 .docx-preview h1 { font-size: 1.25rem; font-weight: 700; text-align: center; margin: 0.2rem 0 0.8rem; color: #fff; }
 .docx-preview h2,
 .docx-preview h3,
